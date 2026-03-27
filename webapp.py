@@ -170,6 +170,8 @@ def _detection_loop() -> None:
                 rvec = pose_est.refine_rotation_with_handle_dir(rvec, tvec, wrist_px)
 
             state = tracker.update(detection, rvec, tvec)
+            if state is None:
+                state = {}
 
             dist = float(np.linalg.norm(tvec)) if tvec is not None else None
 
@@ -198,26 +200,30 @@ def _render_loop() -> None:
     global _jpeg
     interval = 1 / 30
     while True:
-        t0 = time.monotonic()
+        try:
+            t0 = time.monotonic()
 
-        with _raw_lock:
-            frame = _raw_frame
-        if frame is None:
-            time.sleep(interval)
-            continue
+            with _raw_lock:
+                frame = _raw_frame
+            if frame is None:
+                time.sleep(interval)
+                continue
 
-        with _det_lock:
-            state      = dict(_det_state)
-            hands      = list(_det_hands)
-            yolo_boxes = list(_det_yolo_boxes)
+            with _det_lock:
+                state      = dict(_det_state) if _det_state else {}
+                hands      = list(_det_hands)
+                yolo_boxes = list(_det_yolo_boxes)
 
-        canvas = _draw_overlays(frame.copy(), state, hands, yolo_boxes, camera.fps)
-        _, buf = cv2.imencode(".jpg", canvas, [cv2.IMWRITE_JPEG_QUALITY, 78])
-        with _jpeg_lock:
-            _jpeg = buf.tobytes()
+            canvas = _draw_overlays(frame.copy(), state, hands, yolo_boxes, camera.fps)
+            _, buf = cv2.imencode(".jpg", canvas, [cv2.IMWRITE_JPEG_QUALITY, 78])
+            with _jpeg_lock:
+                _jpeg = buf.tobytes()
 
-        elapsed = time.monotonic() - t0
-        time.sleep(max(0, interval - elapsed))
+            elapsed = time.monotonic() - t0
+            time.sleep(max(0, interval - elapsed))
+        except Exception as exc:
+            print(f"[render] {exc}")
+            time.sleep(0.1)
 
 
 # ── Flask routes ───────────────────────────────────────────────────────────────
@@ -245,6 +251,20 @@ def snapshot():
 def api_status():
     with _status_lock:
         return jsonify(dict(_status))
+
+
+@app.route("/api/pose")
+def api_pose():
+    with _det_lock:
+        state = dict(_det_state) if _det_state else {}
+    rvec = state.get("rvec")
+    tvec = state.get("tvec")
+    return jsonify({
+        "is_tracking":  bool(state.get("is_tracking")),
+        "visible_side": state.get("visible_side") or "red",
+        "rvec": rvec.flatten().tolist() if rvec is not None else None,
+        "tvec": tvec.flatten().tolist() if tvec is not None else None,
+    })
 
 
 @app.route("/api/config", methods=["GET"])
