@@ -1,0 +1,21 @@
+# PongBot – paddle tracker requirements
+# Install with:  pip install -r requirements.txt
+
+# Core computer vision
+opencv-python>=4.9.0
+
+# Numerical computing
+numpy>=1.26.0
+
+# Qt GUI framework
+PyQt6>=6.6.0
+
+# OpenGL bindings
+PyOpenGL>=3.1.7
+PyOpenGL-accelerate>=3.1.7   # optional but strongly recommended for speed
+
+# YOLO object detection (paddle model or COCO fallback)
+ultralytics>=8.0.0
+
+# Hand detection
+mediapipe>=0.10.0
