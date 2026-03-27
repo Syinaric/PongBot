@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PongBot</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #1f2937;
+      --border:    #30363d;
+      --accent:    #00d4aa;
+      --accent2:   #0ea5e9;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --red:       #f85149;
+      --orange:    #f0883e;
+      --green:     #3fb950;
+      --radius:    10px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .logo-icon {
+      width: 30px;
+      height: 30px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    .conn-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+    .conn-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s;
+    }
+    .conn-badge.connected .conn-dot   { background: var(--green); }
+    .conn-badge.connected .conn-label { color: var(--green); }
+    .conn-badge.disconnected .conn-dot   { background: var(--red); }
+    .conn-badge.disconnected .conn-label { color: var(--red); }
+
+    /* ── Main layout ── */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      grid-template-rows: 1fr auto;
+      gap: 16px;
+      padding: 16px;
+      min-height: 0;
+    }
+
+    /* ── Video panel ── */
+    .video-panel {
+      grid-row: 1;
+      grid-column: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .panel-header .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--red);
+      animation: blink 1.5s infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+    .video-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      position: relative;
+      min-height: 0;
+    }
+    .video-wrap img {
+      max-width: 100%;
+      max-height: 100%;
+      display: block;
+      object-fit: contain;
+    }
+    .video-placeholder {
+      color: var(--muted);
+      text-align: center;
+      font-size: 0.85rem;
+    }
+
+    /* ── Status panel ── */
+    .status-panel {
+      grid-row: 1;
+      grid-column: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+    .card-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    /* Tracking status card */
+    .tracking-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: var(--muted);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .status-indicator.tracking {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+    .status-indicator.lost {
+      background: var(--orange);
+      box-shadow: 0 0 8px var(--orange);
+    }
+    .status-indicator.searching {
+      background: var(--accent2);
+      box-shadow: 0 0 8px var(--accent2);
+    }
+    .status-text {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .stat-item {
+      background: var(--surface2);
+      border-radius: 7px;
+      padding: 10px 12px;
+    }
+    .stat-label {
+      font-size: 0.68rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 1.05rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-value.red    { color: #f85149; }
+    .stat-value.black  { color: #8b949e; }
+    .stat-value.accent { color: var(--accent); }
+
+    /* ── Controls panel ── */
+    .controls-panel {
+      grid-row: 2;
+      grid-column: 1 / -1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .controls-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px 24px;
+      align-items: start;
+    }
+
+    /* Toggle switches */
+    .toggle-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toggle-group-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 2px;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .toggle-row label {
+      font-size: 0.85rem;
+      cursor: pointer;
+      user-select: none;
+      flex: 1;
+    }
+    .switch {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .switch-track {
+      position: absolute;
+      inset: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      transition: background 0.2s, border-color 0.2s;
+      cursor: pointer;
+    }
+    .switch-track::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: left 0.2s, background 0.2s;
+    }
+    .switch input:checked + .switch-track {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .switch input:checked + .switch-track::after {
+      left: 18px;
+      background: #fff;
+    }
+
+    /* Sliders */
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .slider-group-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 2px;
+    }
+    .slider-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+    }
+    .slider-val {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      color: var(--accent);
+      min-width: 36px;
+      text-align: right;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      background: var(--surface2);
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+      border: 1px solid var(--border);
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 4px rgba(0,212,170,0.4);
+    }
+
+    /* Saving indicator */
+    .save-indicator {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--surface);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+    .save-indicator.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🏓</div>
+    PongBot
+  </div>
+  <div class="conn-badge" id="connBadge">
+    <div class="conn-dot"></div>
+    <span class="conn-label" id="connLabel">Connecting…</span>
+  </div>
+</header>
+
+<main>
+  <!-- Video feed -->
+  <div class="video-panel">
+    <div class="panel-header">
+      <div class="dot"></div>
+      Live Feed
+    </div>
+    <div class="video-wrap">
+      <img id="videoFeed" alt="Camera feed" style="display:none">
+      <div class="video-placeholder" id="placeholder">
+        Starting camera…
+      </div>
+    </div>
+  </div>
+
+  <!-- Status sidebar -->
+  <div class="status-panel">
+    <div class="card">
+      <div class="card-title">Tracking Status</div>
+      <div class="tracking-status">
+        <div class="status-indicator" id="statusDot"></div>
+        <div class="status-text" id="statusText">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Detection</div>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-label">Side</div>
+          <div class="stat-value" id="statSide">—</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Distance</div>
+          <div class="stat-value accent" id="statDist">—</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">FPS</div>
+          <div class="stat-value accent" id="statFps">—</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Hand</div>
+          <div class="stat-value" id="statHand">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Frame Info</div>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-label">YOLO Hints</div>
+          <div class="stat-value accent" id="statYolo">—</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Frames Lost</div>
+          <div class="stat-value" id="statLost">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-panel">
+    <div class="controls-title">Controls</div>
+    <div class="controls-grid">
+
+      <!-- Feature toggles -->
+      <div class="toggle-group">
+        <div class="toggle-group-label">Features</div>
+        <div class="toggle-row">
+          <label for="togYolo">YOLO Detection</label>
+          <label class="switch">
+            <input type="checkbox" id="togYolo" data-config="yolo_enabled">
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label for="togHand">Hand Detection</label>
+          <label class="switch">
+            <input type="checkbox" id="togHand" data-config="hand_detection_enabled">
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label for="togDebug">Debug Overlays</label>
+          <label class="switch">
+            <input type="checkbox" id="togDebug" data-config="debug_mode">
+            <span class="switch-track"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Overlay toggles -->
+      <div class="toggle-group">
+        <div class="toggle-group-label">Overlays</div>
+        <div class="toggle-row">
+          <label for="togContours">Contours</label>
+          <label class="switch">
+            <input type="checkbox" id="togContours" data-config="show_contours">
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label for="togAxes">3D Axes</label>
+          <label class="switch">
+            <input type="checkbox" id="togAxes" data-config="show_axes">
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label for="togDepth">Depth Label</label>
+          <label class="switch">
+            <input type="checkbox" id="togDepth" data-config="show_depth">
+            <span class="switch-track"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <label for="togHandSkel">Hand Skeleton</label>
+          <label class="switch">
+            <input type="checkbox" id="togHandSkel" data-config="show_hand">
+            <span class="switch-track"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Smoothing / YOLO sliders -->
+      <div class="slider-group">
+        <div class="slider-group-label">Detection Tuning</div>
+        <div class="slider-row">
+          <div class="slider-header">
+            <span>Smoothing</span>
+            <span class="slider-val" id="valSmoothing">0.50</span>
+          </div>
+          <input type="range" id="sldSmoothing" data-config="smoothing_alpha"
+                 min="0.01" max="1.0" step="0.01" value="0.50">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header">
+            <span>YOLO Confidence</span>
+            <span class="slider-val" id="valYoloConf">0.40</span>
+          </div>
+          <input type="range" id="sldYoloConf" data-config="yolo_confidence"
+                 min="0.1" max="0.95" step="0.01" value="0.40">
+        </div>
+      </div>
+
+      <!-- Black rubber sliders -->
+      <div class="slider-group">
+        <div class="slider-group-label">Black Rubber Thresholds</div>
+        <div class="slider-row">
+          <div class="slider-header">
+            <span>Max Saturation</span>
+            <span class="slider-val" id="valBlackSat">80</span>
+          </div>
+          <input type="range" id="sldBlackSat" data-config="black_sat_max"
+                 min="20" max="200" step="1" value="80">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header">
+            <span>Max Value</span>
+            <span class="slider-val" id="valBlackVal">60</span>
+          </div>
+          <input type="range" id="sldBlackVal" data-config="black_val_max"
+                 min="10" max="180" step="1" value="60">
+        </div>
+      </div>
+
+    </div><!-- /controls-grid -->
+  </div>
+</main>
+
+<div class="save-indicator" id="saveIndicator">Saved</div>
+
+<script>
+  // ── Live video feed (JS polling of /snapshot) ────────────────────────────
+  const videoFeed   = document.getElementById('videoFeed');
+  const placeholder = document.getElementById('placeholder');
+  let   frameErrors = 0;
+
+  function fetchFrame() {
+    fetch('/snapshot?' + Date.now())
+      .then(r => {
+        if (r.status === 204) return null;  // pipeline not ready yet
+        return r.blob();
+      })
+      .then(blob => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const old = videoFeed.src;
+        videoFeed.src = url;
+        if (videoFeed.style.display === 'none') {
+          videoFeed.style.display = 'block';
+          placeholder.style.display = 'none';
+        }
+        // Revoke previous blob URL after the image has loaded
+        videoFeed.onload = () => { if (old.startsWith('blob:')) URL.revokeObjectURL(old); };
+        frameErrors = 0;
+      })
+      .catch(() => {
+        frameErrors++;
+        if (frameErrors > 5) {
+          placeholder.style.display = 'block';
+          videoFeed.style.display = 'none';
+          placeholder.textContent = 'Camera unavailable';
+        }
+      });
+  }
+
+  // Poll at ~25 fps
+  setInterval(fetchFrame, 40);
+  fetchFrame();
+
+  // ── Status polling ────────────────────────────────────────────────────────
+  const connBadge = document.getElementById('connBadge');
+  const connLabel = document.getElementById('connLabel');
+  const statusDot  = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const statSide   = document.getElementById('statSide');
+  const statDist   = document.getElementById('statDist');
+  const statFps    = document.getElementById('statFps');
+  const statHand   = document.getElementById('statHand');
+  const statYolo   = document.getElementById('statYolo');
+  const statLost   = document.getElementById('statLost');
+
+  function updateStatus(d) {
+    // Connection badge
+    connBadge.className = 'conn-badge connected';
+    connLabel.textContent = 'Connected';
+
+    // Tracking state
+    if (d.is_tracking) {
+      statusDot.className = 'status-indicator tracking';
+      statusText.textContent = 'Tracking';
+    } else if (d.frames_lost > 0) {
+      statusDot.className = 'status-indicator lost';
+      statusText.textContent = `Lost (${d.frames_lost}f)`;
+    } else {
+      statusDot.className = 'status-indicator searching';
+      statusText.textContent = 'Searching…';
+    }
+
+    // Side
+    statSide.textContent   = d.visible_side ? d.visible_side.toUpperCase() : '—';
+    statSide.className     = 'stat-value ' + (d.visible_side === 'red' ? 'red' : d.visible_side === 'black' ? 'black' : '');
+    statDist.textContent   = d.distance !== null ? d.distance.toFixed(2) + ' m' : '—';
+    statFps.textContent    = d.fps !== null ? d.fps.toFixed(1) : '—';
+    statHand.textContent   = d.hand_detected ? '✓ Yes' : '✗ No';
+    statHand.style.color   = d.hand_detected ? 'var(--green)' : 'var(--muted)';
+    statYolo.textContent   = d.yolo_detections;
+    statLost.textContent   = d.frames_lost;
+  }
+
+  async function pollStatus() {
+    try {
+      const r = await fetch('/api/status');
+      if (r.ok) updateStatus(await r.json());
+    } catch {
+      connBadge.className = 'conn-badge disconnected';
+      connLabel.textContent = 'Disconnected';
+    }
+  }
+  setInterval(pollStatus, 500);
+  pollStatus();
+
+  // ── Config: load initial values ───────────────────────────────────────────
+  const sliderMeta = {
+    sldSmoothing: { valId: 'valSmoothing', fmt: v => parseFloat(v).toFixed(2) },
+    sldYoloConf:  { valId: 'valYoloConf',  fmt: v => parseFloat(v).toFixed(2) },
+    sldBlackSat:  { valId: 'valBlackSat',  fmt: v => parseInt(v) },
+    sldBlackVal:  { valId: 'valBlackVal',  fmt: v => parseInt(v) },
+  };
+
+  const configKeys = {
+    sldSmoothing: 'smoothing_alpha',
+    sldYoloConf:  'yolo_confidence',
+    sldBlackSat:  'black_sat_max',
+    sldBlackVal:  'black_val_max',
+    togYolo:      'yolo_enabled',
+    togHand:      'hand_detection_enabled',
+    togDebug:     'debug_mode',
+    togContours:  'show_contours',
+    togAxes:      'show_axes',
+    togDepth:     'show_depth',
+    togHandSkel:  'show_hand',
+  };
+
+  async function loadConfig() {
+    try {
+      const r = await fetch('/api/config');
+      if (!r.ok) return;
+      const cfg = await r.json();
+      // Sliders
+      for (const [elId, meta] of Object.entries(sliderMeta)) {
+        const key = configKeys[elId];
+        const el  = document.getElementById(elId);
+        const val = cfg[key];
+        if (el && val !== undefined) {
+          el.value = val;
+          document.getElementById(meta.valId).textContent = meta.fmt(val);
+        }
+      }
+      // Toggles
+      ['togYolo','togHand','togDebug','togContours','togAxes','togDepth','togHandSkel'].forEach(id => {
+        const el = document.getElementById(id);
+        const key = configKeys[id];
+        if (el && cfg[key] !== undefined) el.checked = cfg[key];
+      });
+    } catch(e) { console.warn('Config load failed', e); }
+  }
+  loadConfig();
+
+  // ── Config: save on change (debounced) ───────────────────────────────────
+  const saveIndicator = document.getElementById('saveIndicator');
+  let saveTimer = null;
+
+  function showSaved() {
+    saveIndicator.classList.add('show');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveIndicator.classList.remove('show'), 1500);
+  }
+
+  async function sendConfig(key, value) {
+    try {
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: value }),
+      });
+      showSaved();
+    } catch(e) { console.warn('Config save failed', e); }
+  }
+
+  // Wire sliders
+  for (const [elId, meta] of Object.entries(sliderMeta)) {
+    const el  = document.getElementById(elId);
+    const key = configKeys[elId];
+    el.addEventListener('input', () => {
+      const v = el.value;
+      document.getElementById(meta.valId).textContent = meta.fmt(v);
+      sendConfig(key, parseFloat(v));
+    });
+  }
+
+  // Wire toggles
+  ['togYolo','togHand','togDebug','togContours','togAxes','togDepth','togHandSkel'].forEach(id => {
+    const el  = document.getElementById(id);
+    const key = configKeys[id];
+    el.addEventListener('change', () => sendConfig(key, el.checked));
+  });
+</script>
+</body>
+</html>

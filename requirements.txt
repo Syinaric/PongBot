@@ -19,3 +19,6 @@ ultralytics>=8.0.0
 
 # Hand detection
 mediapipe>=0.10.0
+
+# Web interface
+flask>=3.0.0
